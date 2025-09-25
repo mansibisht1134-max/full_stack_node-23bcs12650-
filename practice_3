@@ -1,0 +1,89 @@
+// ticketBooking.js
+const express = require("express");
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
+
+// Seat states:
+// available: can be locked or booked
+// locked: temporarily held by a user
+// booked: confirmed by a user
+let seats = [
+  { id: 1, status: "available", lockedBy: null, lockTimer: null },
+  { id: 2, status: "available", lockedBy: null, lockTimer: null },
+  { id: 3, status: "available", lockedBy: null, lockTimer: null },
+  { id: 4, status: "available", lockedBy: null, lockTimer: null },
+  { id: 5, status: "available", lockedBy: null, lockTimer: null },
+];
+
+// View all seats
+app.get("/seats", (req, res) => {
+  const seatStatus = seats.map(({ id, status, lockedBy }) => ({
+    id,
+    status,
+    lockedBy,
+  }));
+  res.json(seatStatus);
+});
+
+// Lock a seat for a user
+app.post("/seats/lock", (req, res) => {
+  const { seatId, user } = req.body;
+  const seat = seats.find((s) => s.id === seatId);
+
+  if (!seat) return res.status(404).json({ message: "Seat not found" });
+
+  if (seat.status === "booked")
+    return res.status(400).json({ message: "Seat already booked" });
+
+  if (seat.status === "locked")
+    return res
+      .status(400)
+      .json({ message: `Seat is currently locked by ${seat.lockedBy}` });
+
+  // Lock the seat
+  seat.status = "locked";
+  seat.lockedBy = user;
+
+  // Set a timer to release lock automatically after 1 minute
+  seat.lockTimer = setTimeout(() => {
+    seat.status = "available";
+    seat.lockedBy = null;
+    seat.lockTimer = null;
+    console.log(`Seat ${seat.id} lock expired`);
+  }, 60 * 1000);
+
+  res.json({ message: `Seat ${seatId} locked for user ${user}` });
+});
+
+// Confirm booking
+app.post("/seats/confirm", (req, res) => {
+  const { seatId, user } = req.body;
+  const seat = seats.find((s) => s.id === seatId);
+
+  if (!seat) return res.status(404).json({ message: "Seat not found" });
+
+  if (seat.status === "booked")
+    return res.status(400).json({ message: "Seat already booked" });
+
+  if (seat.status !== "locked" || seat.lockedBy !== user)
+    return res
+      .status(400)
+      .json({ message: "Seat not locked by you, cannot confirm" });
+
+  // Confirm booking
+  seat.status = "booked";
+  seat.lockedBy = user;
+  if (seat.lockTimer) {
+    clearTimeout(seat.lockTimer);
+    seat.lockTimer = null;
+  }
+
+  res.json({ message: `Seat ${seatId} successfully booked by ${user}` });
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Ticket booking server running at http://localhost:${PORT}`);
+});
